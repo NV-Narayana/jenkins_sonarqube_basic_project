@@ -1,41 +1,68 @@
 pipeline {
     agent any
-    tools { 
-        maven 'maven-3.8.6' 
+
+    tools {
+        maven 'Apache-Maven'
     }
+
     stages {
-        stage('Checkout git') {
+
+        stage('Checkout Git') {
             steps {
-               git branch: 'main', url: 'https://github.com/NV-Narayana/jenkins_sonarqube_basic_project.git'
+                git branch: 'main',
+                    url: 'https://github.com/NV-Narayana/jenkins_sonarqube_basic_project.git'
             }
         }
-        
-        stage ('Build & JUnit Test') {
+
+        stage('Build & JUnit Test') {
             steps {
-                sh 'mvn install'
-                sh 'mvn clear package'
+                sh 'mvn clean verify'
             }
+
             post {
-               success {
-                    junit 'target/surefire-reports/**/*.xml'
-                }   
+                always {
+                    junit allowEmptyResults: true,
+                          testResults: 'target/surefire-reports/**/*.xml'
+                }
             }
         }
-        stage('SonarQube Analysis'){
-            steps{
-                   withSonarQubeEnv('SonarQube-Server') {
-                        sh 'mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=devops-project-key \
-                        -Dsonar.host.url=$http://3.87.145.149:9000 \
-                        -Dsonar.login=$sonarlogin'
-                    }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube-Server') {
+                    sh '''
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:5.5.0.6356:sonar
+                    '''
+                }
             }
         }
-        stage('Deploy'){
-            steps{
-                sh 'timeout 60s java -jar /var/lib/jenkins/workspace/devopscicd/target/demo-0.0.1-SNAPSHOT.jar'
+
+        stage('Deploy') {
+            steps {
+                echo 'Checking application JAR...'
+
+                sh '''
+                    ls -lh target/
+                    test -f target/demo-0.0.1-SNAPSHOT.jar
+                '''
+
+                archiveArtifacts artifacts: 'target/*.jar',
+                                 fingerprint: true
             }
-        }
         }
     }
-        
+
+    post {
+        success {
+            echo 'Pipeline executed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed. Please check Console Output.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
+        }
+    }
+}
